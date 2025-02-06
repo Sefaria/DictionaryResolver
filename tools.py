@@ -2,9 +2,7 @@ from __future__ import annotations
 import requests
 from typing import Tuple, List
 from langchain_core.tools import tool
-from util import clean_nested_html
-
-LEXICON_CONTENT_KEYS = ["headword", "parent_lexicon", "content"]
+from util import prune_lexicon_entry
 
 lexicon_map = {
     "Reference/Dictionary/Jastrow" : 'Jastrow Dictionary',
@@ -31,14 +29,14 @@ def words_api(query: str, ref:str=None)->Tuple[List[dict], List[dict]]:
         response = requests.get(f"https://www.sefaria.org/api/words/{query}?always_consonants=1&never_split=1")
     response.raise_for_status()
 
-    candidates = [clean_nested_html(d) for d in response.json() if d["parent_lexicon"] in lexicon_names]
+    candidates = [d for d in response.json() if d["parent_lexicon"] in lexicon_names]
 
     if ref:
-        possible_entries = [{k: v for k, v in d.items() if k in LEXICON_CONTENT_KEYS} for d in candidates if ref not in d.get("refs", [])]
-        associated_entries = [{k: v for k, v in d.items() if k in LEXICON_CONTENT_KEYS} for d in candidates if ref in d.get("refs", [])]
+        possible_entries = [prune_lexicon_entry(d) for d in candidates if ref not in d.get("refs", [])]
+        associated_entries = [prune_lexicon_entry(d) for d in candidates if ref in d.get("refs", [])]
         return possible_entries, associated_entries
     else:
-        return [{k: v for k, v in d.items() if k in LEXICON_CONTENT_KEYS} for d in candidates], []
+        return [prune_lexicon_entry(d) for d in candidates], []
 
 
 @tool

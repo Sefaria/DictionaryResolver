@@ -16,16 +16,9 @@ class LexRef(BaseModel):
         # Return a hash based on the same fields used in __eq__
         return hash((self.headword, self.lexicon_name))
 
-'''
-class WordLexRefs(BaseModel):
-    word: str = Field(description="The word being associated with the dictionary entry")
-    segment: str = Field(description="The segment of text in which the word appears")
-    entries: List[LexRef] = Field(description="The dictionary entries associated with the word")
-'''
-
 class SegmentsAndLexRefs(BaseModel):
     lexrefs: List[LexRef] = Field(description="The dictionary entries associated with the word form")
-    segments: List[str] = Field(description="The segments of text in which the word form appears")
+    refs: List[str] = Field(description="The refs of the segments of text in which the word form appears")
 
 class WordFormAssociations(BaseModel):
     word: str = Field(description="The word form being associated with the dictionary entries")

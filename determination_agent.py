@@ -9,11 +9,30 @@ from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from llm import model
-from models import WordDetermination
+from models import WordDetermination, LexRef
 from tools import search_word_forms, search_dictionaries, words_api
 
 tools = [search_word_forms, search_dictionaries, WordDetermination]
 model_with_tools = model.bind_tools(tools, tool_choice="any")
+
+
+async def get_determination(state: dict) -> dict:
+    """
+    Get the determination for a single word or phrase in a segment of text
+    initial state includes:
+        - word: str
+        - segment: str
+        - cached_associations: list[list[LexRef]]
+    we add:
+        - selected_association: list[LexRef]
+        - determination: WordDetermination
+
+    :param word: The word or phrase being determined
+    :param ref: Normal Sefaria Ref
+    :param segment: The full text of the segment
+    :return: WordDetermination
+    """
+    return await word_determination_agent.ainvoke(state, stream_mode="values")
 
 
 class WordState(MessagesState):
@@ -21,6 +40,8 @@ class WordState(MessagesState):
     word: str
     segment: str
     ref: str
+    cached_associations: list[list[LexRef]]
+    selected_association: list[LexRef]
     determination: WordDetermination
 
 def determination_agent() -> CompiledStateGraph:
@@ -28,11 +49,6 @@ def determination_agent() -> CompiledStateGraph:
     Create a state graph for the determination agent.
     This agent will determine the best dictionary entries for a given word or phrase within a larger section of text.
     The agent will be able to search for dictionary entries, and will be able to call a model to determine the best entries.
-
-    Input: word, segment, ref
-    Output: determination
-
-    :return:
     """
     graph = StateGraph(WordState)
     graph.add_node("initiate_determination", initiate_determination)
@@ -51,8 +67,7 @@ def determination_agent() -> CompiledStateGraph:
     graph.add_edge("respond_with_determination",  END)
 
     return graph.compile()
-
-
+word_determination_agent = determination_agent()
 
 def initiate_determination(state: WordState):
     """
@@ -105,7 +120,8 @@ def respond_with_determination(state: WordState):
     # Construct the final answer from the arguments of the last tool call
     tool_calls = state["messages"][-1].tool_calls
     tool_call = next(call for call in tool_calls if call["name"] == "WordDetermination")
-    response = WordDetermination(**tool_call["args"])
+    determination = WordDetermination(**tool_call["args"])
+    selected_association = determination.entries_to_keep + determination.entries_to_add
     # Since we're using tool calling to return structured output,
     # we need to add  a tool message corresponding to the WordDetermination tool call,
     # This is due to LLM providers' requirement that AI messages with tool calls
@@ -115,7 +131,7 @@ def respond_with_determination(state: WordState):
         "content": "Here is your structured response",
         "tool_call_id": tool_call["id"],
     }
-    return {"determination": response, "messages": [tool_message]}
+    return {"determination": determination, "selected_association": selected_association, "messages": [tool_message]}
 
 
 def refuse_determination(state: WordState):

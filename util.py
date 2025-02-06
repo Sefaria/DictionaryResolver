@@ -28,6 +28,13 @@ def strip_html(text: str, tags: Optional[List[str]] = None) -> str:
         return str(soup)
 
 
+LEXICON_CONTENT_KEYS = ["headword", "parent_lexicon", "content"]
+def prune_lexicon_entry(entry: Dict) -> Dict:
+    pruned = {k: v for k, v in entry.items() if k in LEXICON_CONTENT_KEYS}
+    cleaned = clean_nested_html(pruned)
+    return cleaned
+
+
 def clean_nested_html(data: Union[Dict[str, Any], List[Any], str],
                       tags: List[str] | None = None
                       ) -> Union[Dict[str, Any], List[Any], str]:

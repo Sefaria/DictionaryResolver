@@ -3,14 +3,14 @@ import asyncio
 import logging
 from typing import List
 from langsmith import traceable
-from determination_agent import WordDetermination, determination_agent
+from determination_agent import WordDetermination, get_determination
+from determination_validator import vet_association_candidates
 from phrase_extractor import split_segment
+from cache import get_cached_associations, add_segment_to_cache
+from db import record_determination
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-word_determination_agent = determination_agent()
-
 
 
 @traceable(
@@ -27,15 +27,27 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[WordDetermina
     """
     words = split_segment(segment)
 
-    async def get_determination(word: str) -> WordDetermination:
-        inputs = {"ref": ref, "segment": segment, "word": word}
-        result = await word_determination_agent.ainvoke(inputs, stream_mode="values")
-        return result["determination"]
+    # Create state objects
+    # I'm assuming that state_objects will be mutated in place
+    state_objects = [
+        {"ref": ref, "word": word, "segment": segment, "cached_associations": get_cached_associations(word), "selected_association": None, "determination": None}
+        for word in words
+    ]
 
-    tasks = [asyncio.create_task(get_determination(word)) for word in words]
-    determinations = await asyncio.gather(*tasks)
+    # Vet those that have possible associations.
+    states_with_previous_associations = [state for state in state_objects if state["cached_associations"]]
+    tasks = [asyncio.create_task(vet_association_candidates(state)) for state in states_with_previous_associations]
+    await asyncio.gather(*tasks)
 
-    return list(determinations)
+    # For words that haven't yet been resolved, call the model to determine the best entries
+    states_without_resolution = [state for state in state_objects if not state["selected_association"]]
+    tasks = [asyncio.create_task(get_determination(state)) for state in states_without_resolution]
+    await asyncio.gather(*tasks)
+
+    # Record the words and associations in the cache and in the DB.
+    for state in state_objects:
+        add_segment_to_cache(state)
+        record_determination(state)
 
 
 if __name__ == "__main__":
