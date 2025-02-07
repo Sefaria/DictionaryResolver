@@ -1,11 +1,19 @@
 from __future__ import annotations
 from llm import model
-from models import LexRef
+from models import LexRef, BoolOutput
 from util import prune_lexicon_entry
-from sefaria.model import LexiconEntry
 from typing import Optional
+from langsmith import traceable
+import django
+django.setup()
+from sefaria.model import LexiconEntry
 
 
+@traceable(
+    run_type="chain",
+    name="Vet Association Candidates",
+    project_name="Dictionary Resolver"
+)
 async def vet_association_candidates(state: dict) -> dict:
     """
     initial state includes:
@@ -37,7 +45,8 @@ async def is_validate_association(word: str, segment: str, entries: list[dict]) 
     {entries}
     
     Please return True if these are valid and sufficient dictionary entries.  False, otherwise."""
-    return await model.with_structured_output(bool).ainvoke(prompt)
+    result = await model.with_structured_output(BoolOutput).ainvoke(prompt)
+    return result.value
 
 def get_entry(lexref: LexRef) -> Optional[LexiconEntry]:
     """

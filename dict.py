@@ -2,7 +2,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import List
-from langsmith import traceable
 from determination_agent import WordDetermination, get_determination
 from determination_validator import vet_association_candidates
 from phrase_extractor import split_segment
@@ -13,11 +12,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-@traceable(
-    run_type="chain",
-    name="Correct Words in Segment",
-    project_name="Correct Words in Segment"
-)
 async def correct_words_in_segment(ref: str, segment: str) -> List[WordDetermination]:
     """
 
@@ -60,9 +54,13 @@ if __name__ == "__main__":
     #segment = ''' חַד בַּר נַשׁ הֲוָה קָאִים רְדִי. פָּֽסְקָת תּוֹרָתֵיהּ קוֹמוֹי. הֲװָת פָֽרְיָא וְהוּא פָרֵי פָֽרְיָא וְהוּא פָרֵי עַד דְּאִשְׁתְּכָח יְהִיב בְּבָבֶל. אָֽמְרוּ לֵיהּ אֵימַת נָֽפְקָת. אָמַר לוֹן יוֹמָא דֵין. אָֽמְרִין בְּהֵיידָא אָתִיתָא. אָמַר לוֹן בְּדָא. אָמַר לוֹן אִיתָא חָמֵי לֹן. נְפַק בְּעֵי מֵיחְמַייָא לוֹן וְלָא חַכִּים בְּהֵיידָא'''
     #ref = "Jerusalem Talmud Maaser Sheni 5:2:6"
 
-    segment = ''' לִיבְטֵּיל — וַהֲלֹא לֹא נִבְרָא הָעוֹלָם אֶלָּא לִפְרִיָּה וּרְבִיָּה, שֶׁנֶּאֱמַר: ״לֹא תֹהוּ בְרָאָהּ לָשֶׁבֶת יְצָרָהּ״. אֶלָּא מִפְּנֵי תִּיקּוּן הָעוֹלָם, כּוֹפִין אֶת רַבּוֹ וְעוֹשֶׂה אוֹתוֹ בֶּן חוֹרִין, וְכוֹתֵב לוֹ שְׁטָר עַל חֲצִי דָּמָיו. וְחָזְרוּ בֵּית הִלֵּל לְהוֹרוֹת כְּדִבְרֵי בֵּית שַׁמַּאי.'''
-    ref = "Chagigah 2b:2"
+    #segment = ''' לִיבְטֵּיל — וַהֲלֹא לֹא נִבְרָא הָעוֹלָם אֶלָּא לִפְרִיָּה וּרְבִיָּה, שֶׁנֶּאֱמַר: ״לֹא תֹהוּ בְרָאָהּ לָשֶׁבֶת יְצָרָהּ״. אֶלָּא מִפְּנֵי תִּיקּוּן הָעוֹלָם, כּוֹפִין אֶת רַבּוֹ וְעוֹשֶׂה אוֹתוֹ בֶּן חוֹרִין, וְכוֹתֵב לוֹ שְׁטָר עַל חֲצִי דָּמָיו. וְחָזְרוּ בֵּית הִלֵּל לְהוֹרוֹת כְּדִבְרֵי בֵּית שַׁמַּאי.'''
+    #ref = "Chagigah 2b:2"
 
-    determinations = asyncio.run(correct_words_in_segment(ref, segment))
+    # determinations = asyncio.run(correct_words_in_segment(ref, segment))
+    determinations = asyncio.run(correct_words_in_segment("Taanit 2a:4", "גְּמָ׳ תַּנָּא הֵיכָא קָאֵי דְּקָתָנֵי ״מֵאֵימָתַי״? תַּנָּא הָתָם קָאֵי —"))
+    print(determinations)
+
+    determinations = asyncio.run(correct_words_in_segment("Taanit 2a:5", "דְּקָתָנֵי: מַזְכִּירִים גְּבוּרוֹת גְּשָׁמִים בִּתְחִיַּית הַמֵּתִים, וְשׁוֹאֲלִין בְּבִרְכַּת הַשָּׁנִים, וְהַבְדָּלָה בְּחוֹנֵן הַדָּעַת. וְקָתָנֵי: מֵאֵימָתַי מַזְכִּירִים גְּבוּרוֹת גְּשָׁמִים."))
     print(determinations)
 

@@ -35,3 +35,6 @@ class WordDetermination(BaseModel):
 class PhrasesInSegment(BaseModel):
     phrases: List[str] = Field(description="The phrases in the segment")
 
+class BoolOutput(BaseModel):
+    value: bool = Field(description="The boolean result of the operation")
+

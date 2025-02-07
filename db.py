@@ -1,3 +1,5 @@
+import django
+django.setup()
 from sefaria.model import WordForm
 from models import LexRef
 from typing import Optional
@@ -35,9 +37,12 @@ def add_ref_to_wordform(wordform: WordForm, ref: str):
     :param ref:
     :return:
     """
-    if ref in wordform.refs:
+    if getattr(wordform, "refs", None) is None:
+        wordform.refs = [ref]
+    elif ref in wordform.refs:
         return
-    wordform.refs += [ref]
+    else:
+        wordform.refs += [ref]
     wordform.save()
 
 def create_wordform(word: str, associations: list[LexRef], ref: str):

@@ -7,6 +7,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.constants import START, END
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langsmith import traceable
 
 from llm import model
 from models import WordDetermination, LexRef
@@ -15,6 +16,11 @@ from tools import search_word_forms, search_dictionaries, words_api
 tools = [search_word_forms, search_dictionaries, WordDetermination]
 model_with_tools = model.bind_tools(tools, tool_choice="any")
 
+@traceable(
+    run_type="chain",
+    name="Determine Associations",
+    project_name="Dictionary Resolver"
+)
 
 async def get_determination(state: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -35,39 +41,6 @@ async def get_determination(state: Dict[str, Any]) -> Dict[str, Any]:
     return state
 
 
-class WordState(MessagesState):
-    """ State of the overall graph """
-    word: str
-    segment: str
-    ref: str
-    cached_associations: list[list[LexRef]]
-    selected_association: list[LexRef]
-    determination: WordDetermination
-
-def determination_agent() -> CompiledStateGraph:
-    """
-    Create a state graph for the determination agent.
-    This agent will determine the best dictionary entries for a given word or phrase within a larger section of text.
-    The agent will be able to search for dictionary entries, and will be able to call a model to determine the best entries.
-    """
-    graph = StateGraph(WordState)
-    graph.add_node("initiate_determination", initiate_determination)
-    graph.add_node("call_determination_model", call_determination_model)
-    graph.add_node("respond_with_determination", respond_with_determination)
-    graph.add_node("refuse_determination", refuse_determination)
-    graph.add_node("call_search_word_forms", call_search_word_forms)
-    graph.add_node("call_search_dictionaries", call_search_dictionaries)
-
-    graph.add_edge(START,"initiate_determination")
-    graph.add_edge("initiate_determination", "call_determination_model")
-    graph.add_conditional_edges("call_determination_model", should_continue_determination)
-    graph.add_edge("call_search_word_forms", "call_determination_model")
-    graph.add_edge("call_search_dictionaries", "call_determination_model")
-    graph.add_edge("refuse_determination",  "call_determination_model")
-    graph.add_edge("respond_with_determination",  END)
-
-    return graph.compile()
-word_determination_agent = determination_agent()
 
 async def initiate_determination(state: WordState) -> Dict[str, Any]:
     """
@@ -210,3 +183,36 @@ async def call_search_word_forms(state: WordState):
     return {"messages": messages}
 
 
+class WordState(MessagesState):
+    """ State of the overall graph """
+    word: str
+    segment: str
+    ref: str
+    cached_associations: list[list[LexRef]]
+    selected_association: list[LexRef]
+    determination: WordDetermination
+
+def determination_agent() -> CompiledStateGraph:
+    """
+    Create a state graph for the determination agent.
+    This agent will determine the best dictionary entries for a given word or phrase within a larger section of text.
+    The agent will be able to search for dictionary entries, and will be able to call a model to determine the best entries.
+    """
+    graph = StateGraph(WordState)
+    graph.add_node("initiate_determination", initiate_determination)
+    graph.add_node("call_determination_model", call_determination_model)
+    graph.add_node("respond_with_determination", respond_with_determination)
+    graph.add_node("refuse_determination", refuse_determination)
+    graph.add_node("call_search_word_forms", call_search_word_forms)
+    graph.add_node("call_search_dictionaries", call_search_dictionaries)
+
+    graph.add_edge(START,"initiate_determination")
+    graph.add_edge("initiate_determination", "call_determination_model")
+    graph.add_conditional_edges("call_determination_model", should_continue_determination)
+    graph.add_edge("call_search_word_forms", "call_determination_model")
+    graph.add_edge("call_search_dictionaries", "call_determination_model")
+    graph.add_edge("refuse_determination",  "call_determination_model")
+    graph.add_edge("respond_with_determination",  END)
+
+    return graph.compile()
+word_determination_agent = determination_agent()

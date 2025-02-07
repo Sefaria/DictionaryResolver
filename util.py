@@ -68,7 +68,7 @@ def split_hebrew_text(text: str) -> List[str]:
 
     for word in text.split():
         # Strip punctuation from start and end, internal " will be preserved.  ' is not stripped for fear of losing abbreviations.
-        word = word.strip('?!,.;:"')
+        word = word.strip('—?!,.;:"״')
         if word:
             cleaned_words.append(word)
 

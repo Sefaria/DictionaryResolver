@@ -3,8 +3,13 @@ from typing import List
 from util import split_hebrew_text
 from llm import model
 from models import PhrasesInSegment
+from langsmith import traceable
 
-
+@traceable(
+    run_type="chain",
+    name="Split Segment",
+    project_name="Dictionary Resolver"
+)
 def split_segment(input:str) -> List[str]:
     """
     Split a segment of text into words and phrases that may be found in a dictionary.
