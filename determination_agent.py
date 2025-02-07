@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-
+from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.constants import START, END
 from langgraph.graph import MessagesState, StateGraph
@@ -16,7 +16,7 @@ tools = [search_word_forms, search_dictionaries, WordDetermination]
 model_with_tools = model.bind_tools(tools, tool_choice="any")
 
 
-async def get_determination(state: dict) -> dict:
+async def get_determination(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Get the determination for a single word or phrase in a segment of text
     initial state includes:
@@ -27,13 +27,12 @@ async def get_determination(state: dict) -> dict:
         - selected_association: list[LexRef]
         - determination: WordDetermination
 
-    :param word: The word or phrase being determined
-    :param ref: Normal Sefaria Ref
-    :param segment: The full text of the segment
-    :return: WordDetermination
+    :param state:
+    :return:
     """
     result = await word_determination_agent.ainvoke(state, stream_mode="values")
     state.update(result)
+    return state
 
 
 class WordState(MessagesState):
@@ -70,7 +69,7 @@ def determination_agent() -> CompiledStateGraph:
     return graph.compile()
 word_determination_agent = determination_agent()
 
-async def initiate_determination(state: WordState):
+async def initiate_determination(state: WordState) -> Dict[str, Any]:
     """
     Fan out for each word and phrase:
     #   Get the currently associated dictionary entries
@@ -111,13 +110,13 @@ async def initiate_determination(state: WordState):
     return {"messages": [system_message, human_message]}
 
 
-def call_determination_model(state: WordState):
-    response = model_with_tools.invoke(state["messages"])
+async def call_determination_model(state: WordState) -> Dict[str, Any]:
+    response = await model_with_tools.ainvoke(state["messages"])
     # We return a list, because this will get added to the existing list
     return {"messages": [response]}
 
 
-def respond_with_determination(state: WordState):
+def respond_with_determination(state: WordState) -> Dict[str, Any]:
     # Construct the final answer from the arguments of the last tool call
     tool_calls = state["messages"][-1].tool_calls
     tool_call = next(call for call in tool_calls if call["name"] == "WordDetermination")
@@ -132,12 +131,15 @@ def respond_with_determination(state: WordState):
         "content": "Here is your structured response",
         "tool_call_id": tool_call["id"],
     }
-    return {"determination": determination, "selected_association": selected_association, "messages": [tool_message]}
+    return {
+        "determination": determination,
+        "selected_association": selected_association,
+        "messages": [tool_message]
+    }
 
-
-def refuse_determination(state: WordState):
+def refuse_determination(state: WordState) -> Dict[str, Any]:
     tool_calls = state["messages"][-1].tool_calls
-    calls = [c for c in state["messages"][-1].tool_calls if c["name"] == "search_word_forms"]
+    calls = [c for c in tool_calls if c["name"] == "search_word_forms"]
     messages = []
     for c in calls:
         tool_message = {
@@ -170,13 +172,13 @@ def should_continue_determination(state: WordState):
     return calls
 
 
-def call_search_dictionaries(state: WordState):
+async def call_search_dictionaries(state: WordState):
     calls = [c for c in state["messages"][-1].tool_calls if c["name"] == "search_dictionaries"]
     messages = []
 
     for c in calls:
         query = c["args"]["query"]
-        result = search_dictionaries.invoke(query)
+        result = await search_dictionaries.ainvoke(query)
         tool_message = {
             "type": "tool",
             "content": json.dumps(result),
@@ -187,7 +189,7 @@ def call_search_dictionaries(state: WordState):
     return {"messages": messages}
 
 
-def call_search_word_forms(state: WordState):
+async def call_search_word_forms(state: WordState):
     # Gather only the calls for the "search_word_forms" tool
     calls = [c for c in state["messages"][-1].tool_calls if c["name"] == "search_word_forms"]
     messages = []
@@ -195,7 +197,7 @@ def call_search_word_forms(state: WordState):
     for c in calls:
         query = c["args"]["query"]
         # Actually invoke the tool function
-        result = search_word_forms.invoke(query)
+        result = await search_word_forms.ainvoke(query)
         # Build a single tool_result for this call
         tool_message = {
             "type": "tool",
