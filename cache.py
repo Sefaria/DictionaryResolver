@@ -29,6 +29,7 @@ def add_segment_to_cache(state: dict) -> None:
     :param lexrefs:
     :return:
     """
+    assert state["selected_association"], "No association selected for this wordform"
     entry = collection.find_one({"word": state["word"]})
     if entry:
         wfa = WordFormAssociations(**entry)

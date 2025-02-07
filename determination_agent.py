@@ -32,7 +32,8 @@ async def get_determination(state: dict) -> dict:
     :param segment: The full text of the segment
     :return: WordDetermination
     """
-    return await word_determination_agent.ainvoke(state, stream_mode="values")
+    result = await word_determination_agent.ainvoke(state, stream_mode="values")
+    state.update(result)
 
 
 class WordState(MessagesState):
@@ -69,7 +70,7 @@ def determination_agent() -> CompiledStateGraph:
     return graph.compile()
 word_determination_agent = determination_agent()
 
-def initiate_determination(state: WordState):
+async def initiate_determination(state: WordState):
     """
     Fan out for each word and phrase:
     #   Get the currently associated dictionary entries
@@ -93,7 +94,7 @@ def initiate_determination(state: WordState):
         When you are satisfied that you have found the best dictionary entries, return a short explanation of your work, an array of currently associated dictionary entries that should be kept, those that should be removed, and an array of dictionary entries to add.""")
 
 
-    possible_entries, associated_entries = words_api(state["word"], state["ref"])
+    possible_entries, associated_entries = await words_api(state["word"], state["ref"])
 
     associated_clause = "There are no entries currently associated with this word." if not associated_entries else "Associated Entries:\n" + str(associated_entries)
     possible_clause = "---\nPossible Entries:\n" + str(possible_entries) if possible_entries else ""

@@ -17,7 +17,7 @@ def get_existing_wordform(word: str, associations: list[LexRef]) -> Optional[Wor
     :param associations:
     :return:
     """
-
+    assert associations, "No associations provided for wordform"
     query = {
         "form": word,
         "lookups": {

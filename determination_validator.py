@@ -6,7 +6,7 @@ from sefaria.model import LexiconEntry
 from typing import Optional
 
 
-def vet_association_candidates(state: dict) -> dict:
+async def vet_association_candidates(state: dict) -> dict:
     """
     initial state includes:
         - word: str
@@ -25,19 +25,19 @@ def vet_association_candidates(state: dict) -> dict:
             continue
         contents = [prune_lexicon_entry(entry.contents()) for entry in entries]
 
-        if is_validate_association(state["word"], state["segment"], contents):
-            state["determination"] = association_candidate
+        if await is_validate_association(state["word"], state["segment"], contents):
+            state["selected_association"] = association_candidate
             return state
     return state
 
-def is_validate_association(word: str, segment: str, entries: list[dict]) -> bool:
+async def is_validate_association(word: str, segment: str, entries: list[dict]) -> bool:
     prompt = f"""You are a scholar of Jewish texts.  Your task is to validate associations of words to dictionary entries.
     For the word {word} in the text {segment}, the following entries are proposed. 
     
     {entries}
     
     Please return True if these are valid and sufficient dictionary entries.  False, otherwise."""
-    return model.with_structured_output(bool).invoke(prompt)
+    return await model.with_structured_output(bool).ainvoke(prompt)
 
 def get_entry(lexref: LexRef) -> Optional[LexiconEntry]:
     """
