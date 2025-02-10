@@ -40,6 +40,8 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[WordDetermina
 
     # Record the words and associations in the cache and in the DB.
     for state in state_objects:
+        # Look up entry in DB before writing to cache or DB.  The LLMs will make stuff up.
+        # Make sure that we don't write empty records
         add_segment_to_cache(state)
         record_determination(state)
 
