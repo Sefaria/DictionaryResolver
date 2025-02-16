@@ -4,6 +4,13 @@ from models import LexRef, WordFormAssociations, SegmentsAndLexRefs
 db = client["Lexicon"]
 collection = db["assocs"] # stores instances of WordFormAssociations
 
+def clear_cache() -> None:
+    """
+    Clear the cache of all entries.
+    :return:
+    """
+    collection.drop()
+
 def get_cached_associations(wordform: str) -> list[list[LexRef]]:
     """
     Given a wordform, return the lexicon entries sets that have been previously determined to be associated with it.
@@ -29,7 +36,11 @@ def add_segment_to_cache(state: dict) -> None:
     :param lexrefs:
     :return:
     """
-    assert state["selected_association"], "No association selected for this wordform"
+    # As currently used, we shouldn't trip this, but defensive programming
+    if not state["selected_association"]:
+        # log
+        return
+
     entry = collection.find_one({"word": state["word"]})
     if entry:
         wfa = WordFormAssociations(**entry)

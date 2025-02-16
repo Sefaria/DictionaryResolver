@@ -1,11 +1,15 @@
 import django
 django.setup()
-from sefaria.model import WordForm
+from sefaria.model import WordForm, WordFormSet
 from models import LexRef
 from typing import Optional
 from sefaria.utils.hebrew import strip_nikkud
 
 def record_determination(state: dict) -> None:
+    # As currently used, we shouldn't trip this, but defensive programming
+    if not state["selected_association"]:
+        return
+
     existing_wordform = get_existing_wordform(state["word"], state["selected_association"])
     if existing_wordform:
         add_ref_to_wordform(existing_wordform, state["ref"])
@@ -19,7 +23,6 @@ def get_existing_wordform(word: str, associations: list[LexRef]) -> Optional[Wor
     :param associations:
     :return:
     """
-    assert associations, "No associations provided for wordform"
     query = {
         "form": word,
         "lookups": {
@@ -57,7 +60,11 @@ def create_wordform(word: str, associations: list[LexRef], ref: str):
         "form": word,
         "lookups": [ { "headword": x.headword, "parent_lexicon": x.lexicon_name } for x in associations ],
         "refs": [ref],
-        "c_form": strip_nikkud(word)
+        "c_form": strip_nikkud(word),
+        "generated_by": "LLM Dictionary Resolver"
     })
 
     wordform.save()
+
+def clear_wordforms():
+    WordFormSet({"generated_by": "LLM Dictionary Resolver"}).delete()

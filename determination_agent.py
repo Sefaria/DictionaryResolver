@@ -54,21 +54,13 @@ async def initiate_determination(state: WordState) -> Dict[str, Any]:
     #   Return dictionary entries to add and dictionary entries to remove
     """
     is_phrase = re.search(r"\s", state["word"])
-    if is_phrase:
-        system_message = SystemMessage(content="""You are a scholar of Jewish texts. 
-        You will be given a segment of text, a phrase from within that segment, a list of dictionary entries currently associated with that phrase, and sometimes some potential entries that may or may not be correct. 
-        Your job is to find the dictionary entries that best defines the phrase given.  If the given entries are not accurate or sufficient, you will need to find the best entries to replace or augment them.
-        You will be able to search for structured dictionary entries with headword searches.  Please do not search for or return the individual words within the phrase, only entries relating to the whole phrase itself. 
-        The dictionaries at your disposal include the Jastrow Aramaic Dictionary, the Klein Dictionary of Hebrew, the BDB dictionaries of biblical Hebrew and Aramaic, and an encyclopedia of talmudic concepts and idioms called Kovetz Yesodot VaChakirot.  Each of those is preferable in its domain - Jastrow for Aramaic, Klein for Hebrew, and BDB for Biblical language. 
-        When you are satisfied that you have found the best dictionary entries, return a short explanation of your work, an array of currently associated dictionary entries that should be kept, those that should be removed, and an array of dictionary entries to add. ONLY return entries that you have reviewed and are entirely sure are present in the dictionary.""")
-    else:
-        system_message = SystemMessage(content="""You are a scholar of Jewish texts. 
-        You will be given a segment of text, a word from within that segment, a list of dictionary entries currently associated with that word, and sometimes some potential entries that may or may not be correct.
-        Your job is to find the dictionary entries that best defines the word given.  If the given entries are not accurate or sufficient, you will need to find the best entries to replace or augment them.
-        You will be able to search for structured dictionary entries with plain-text searches across dictionaries, and with specific headword searches. 
-        The dictionaries at your disposal include the Jastrow Aramaic Dictionary, the Klein Dictionary of Hebrew, the BDB dictionaries of biblical Hebrew and Aramaic, and an encyclopedia of talmudic concepts and idioms called Kovetz Yesodot VaChakirot.  Each of those is preferable in its domain - Jastrow for Aramaic, Klein for Hebrew, and BDB for Biblical language. 
-        When you are satisfied that you have found the best dictionary entries, return a short explanation of your work, an array of currently associated dictionary entries that should be kept, those that should be removed, and an array of dictionary entries to add. ONLY return entries that you have reviewed and are entirely sure are present in the dictionary.""")
-
+    system_message = SystemMessage(content=f"""You are a scholar of Jewish texts. 
+    You will be given a segment of text, a {"phrase" if is_phrase else "word"} from within that segment, a list of dictionary entries currently associated with that {"phrase" if is_phrase else "word"}, and sometimes some potential entries that may or may not be correct. 
+    Your job is to find the dictionary entries that best defines the {"phrase" if is_phrase else "word"} given.  If the given entries are not accurate or sufficient, you will need to find the best entries to replace or augment them.
+    You will be able to search for structured dictionary entries with headword searches. {"Please do not search for or return the individual words within the phrase, only entries relating to the whole phrase itself." if is_phrase else ""} 
+    The dictionaries at your disposal include the Jastrow Aramaic Dictionary, the Klein Dictionary of Hebrew, the BDB dictionaries of biblical Hebrew and Aramaic, and an encyclopedia of talmudic concepts and idioms called Kovetz Yesodot VaChakirot.  Each of those is preferable in its domain - Jastrow for Aramaic, Klein for Hebrew, and BDB for Biblical language. 
+    When you are satisfied that you have found the best dictionary entries, return a short explanation of your work, an array of currently associated dictionary entries that should be kept, those that should be removed, and an array of dictionary entries to add. ONLY return entries that you have reviewed and are entirely sure are present in the dictionary. 
+    Please return headwords exactly as you have seen them, with the same vowels and any superscript characters or numerals.  If no entries are appropriate, please respond with a determination empty of dictionary entries.""")
 
     possible_entries, associated_entries = await words_api(state["word"], state["ref"])
 
@@ -174,10 +166,9 @@ def should_continue_determination(state: WordState):
                 calls += ["refuse_determination_with_other_calls"]
             else:
                 determination = WordDetermination(**call["args"])
-                for entry in (determination.entries_to_keep + determination.entries_to_add):
-                    if not get_entry(entry):
-                        calls += ["refuse_determination_with_mistaken_entries"]
-                        break
+                if any([not get_entry(entry) for entry in (determination.entries_to_keep + determination.entries_to_add)]):
+                    calls += ["refuse_determination_with_mistaken_entries"]
+                    break
                 calls += ["respond_with_determination"]
         elif name == "search_word_forms":
             calls += ["call_search_word_forms"]

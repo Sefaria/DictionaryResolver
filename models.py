@@ -4,7 +4,7 @@ from typing import List
 
 
 class LexRef(BaseModel):
-    headword: str = Field(description="The exact headword of the dictionary entry as recorded in the headword field")
+    headword: str = Field(description="The exact headword of the dictionary entry as recorded in the headword field, including exact vowels, numerals, and spacing.  The exact headword is used to determine the precise dictionary entry.")
     lexicon_name: str = Field(description="The name of the lexicon, as recorded in the parent_lexicon field")
 
     def __eq__(self, other):

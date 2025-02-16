@@ -2,14 +2,26 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import List
-from determination_agent import WordDetermination, get_determination
+from determination_agent import get_determination
 from determination_validator import vet_association_candidates
 from phrase_extractor import split_segment
-from cache import get_cached_associations, add_segment_to_cache
-from db import record_determination
+from cache import get_cached_associations, add_segment_to_cache, clear_cache
+from db import record_determination, clear_wordforms
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def reset_system():
+    """
+    Reset the system by clearing the cache and the wordforms.
+    This is useful for testing.  Once this hits production, probably not the best idea.
+    :return:
+    """
+    logger.warning("Clearing Cache")
+    clear_cache()
+    logger.warning("Clearing Wordforms")
+    clear_wordforms()
+    logger.warning("System Cleared")
 
 
 async def correct_words_in_segment(ref: str, segment: str) -> List[dict]:
@@ -40,6 +52,9 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[dict]:
 
     # Record the words and associations in the cache and in the DB.
     for state in state_objects:
+        if not state["selected_association"]:
+            # log             "No associations provided for wordform"
+            continue
         # Look up entry in DB before writing to cache or DB.  The LLMs will make stuff up.
         # Make sure that we don't write empty records
         add_segment_to_cache(state)
@@ -61,7 +76,11 @@ if __name__ == "__main__":
     #segment = ''' לִיבְטֵּיל — וַהֲלֹא לֹא נִבְרָא הָעוֹלָם אֶלָּא לִפְרִיָּה וּרְבִיָּה, שֶׁנֶּאֱמַר: ״לֹא תֹהוּ בְרָאָהּ לָשֶׁבֶת יְצָרָהּ״. אֶלָּא מִפְּנֵי תִּיקּוּן הָעוֹלָם, כּוֹפִין אֶת רַבּוֹ וְעוֹשֶׂה אוֹתוֹ בֶּן חוֹרִין, וְכוֹתֵב לוֹ שְׁטָר עַל חֲצִי דָּמָיו. וְחָזְרוּ בֵּית הִלֵּל לְהוֹרוֹת כְּדִבְרֵי בֵּית שַׁמַּאי.'''
     #ref = "Chagigah 2b:2"
 
+
     # determinations = asyncio.run(correct_words_in_segment(ref, segment))
+
+    reset_system()
+
     determinations = asyncio.run(correct_words_in_segment("Taanit 2a:4", "גְּמָ׳ תַּנָּא הֵיכָא קָאֵי דְּקָתָנֵי ״מֵאֵימָתַי״? תַּנָּא הָתָם קָאֵי —"))
     print(determinations)
 
