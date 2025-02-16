@@ -2,8 +2,11 @@ from __future__ import annotations
 from langchain_core.tools import tool
 from util import prune_lexicon_entry
 import aiohttp
-from typing import Tuple, List
-
+from typing import Tuple, List, Optional
+from models import LexRef
+import django
+django.setup()
+from sefaria.model import LexiconEntry
 
 lexicon_map = {
     "Reference/Dictionary/Jastrow" : 'Jastrow Dictionary',
@@ -102,3 +105,13 @@ async def search_dictionaries(query: str):
         }
         for hit in response["hits"]["hits"]
     ]
+
+def get_entry(lexref: LexRef) -> Optional[LexiconEntry]:
+    """
+    This uses the Sefaria code to directly connect to the DB.
+    Ideally this would be an API, to match dependencies for the rest of this system, but no existing API fills this need.
+    :param lexref:
+    :return:
+    """
+    return LexiconEntry().load({"headword": lexref.headword, "parent_lexicon": lexref.lexicon_name})
+

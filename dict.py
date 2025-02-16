@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def correct_words_in_segment(ref: str, segment: str) -> List[WordDetermination]:
+async def correct_words_in_segment(ref: str, segment: str) -> List[dict]:
     """
 
     :param ref: Sefaria Ref in normal form
@@ -44,6 +44,8 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[WordDetermina
         # Make sure that we don't write empty records
         add_segment_to_cache(state)
         record_determination(state)
+
+    return state_objects
 
 
 if __name__ == "__main__":

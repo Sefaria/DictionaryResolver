@@ -11,7 +11,7 @@ from langsmith import traceable
 
 from llm import model
 from models import WordDetermination, LexRef
-from tools import search_word_forms, search_dictionaries, words_api
+from tools import search_word_forms, search_dictionaries, words_api, get_entry
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +26,6 @@ model_with_tools = model.bind_tools(tools, tool_choice="any")
     name="Determine Associations",
     project_name="Dictionary Resolver"
 )
-
 async def get_determination(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Get the determination for a single word or phrase in a segment of text
@@ -115,9 +114,43 @@ def respond_with_determination(state: WordState) -> Dict[str, Any]:
         "messages": [tool_message]
     }
 
-def refuse_determination(state: WordState) -> Dict[str, Any]:
+def refuse_determination_with_mistaken_entries(state: WordState) -> Dict[str, Any]:
+    """
+    There's a WordDetermination that includes non-existent entries.  Refuse to complete the determination.
+    :param state:
+    :return:
+    """
     tool_calls = state["messages"][-1].tool_calls
-    calls = [c for c in tool_calls if c["name"] == "search_word_forms"]
+    tool_call = next(call for call in tool_calls if call["name"] == "WordDetermination")
+    determination = WordDetermination(**tool_call["args"])
+    selected_association = determination.entries_to_keep + determination.entries_to_add
+
+    mistaken_entries = [] # list[LexRef]
+    for entry in selected_association:
+        if not get_entry(entry):
+            mistaken_entries.append(entry)
+
+    message = "WordDetermination can not be called with invalid entries.\nThe following entries are not valid dictionary entries:\n"
+    for entry in mistaken_entries:
+        message += f"{entry.lexicon_name} {entry.headword}\n"
+
+    tool_message = {
+        "type": "tool",
+        "content": message,
+        "tool_call_id": tool_call["id"],
+        "status": "error"
+    }
+    return {"messages": [tool_message]}
+
+
+def refuse_determination_with_other_calls(state: WordState) -> Dict[str, Any]:
+    """
+    There are multiple tool calls with the a WordDetermination call.  Refuse to complete the determination.
+    :param state:
+    :return:
+    """
+    tool_calls = state["messages"][-1].tool_calls
+    calls = [c for c in tool_calls if c["name"] == "WordDetermination"]
     messages = []
     for c in calls:
         tool_message = {
@@ -138,8 +171,13 @@ def should_continue_determination(state: WordState):
         name = call["name"]
         if name == "WordDetermination":
             if multiple:
-                calls += ["refuse_determination"]
+                calls += ["refuse_determination_with_other_calls"]
             else:
+                determination = WordDetermination(**call["args"])
+                for entry in (determination.entries_to_keep + determination.entries_to_add):
+                    if not get_entry(entry):
+                        calls += ["refuse_determination_with_mistaken_entries"]
+                        break
                 calls += ["respond_with_determination"]
         elif name == "search_word_forms":
             calls += ["call_search_word_forms"]
@@ -207,7 +245,8 @@ def determination_agent() -> CompiledStateGraph:
     graph.add_node("initiate_determination", initiate_determination)
     graph.add_node("call_determination_model", call_determination_model)
     graph.add_node("respond_with_determination", respond_with_determination)
-    graph.add_node("refuse_determination", refuse_determination)
+    graph.add_node("refuse_determination_with_other_calls", refuse_determination_with_other_calls)
+    graph.add_node("refuse_determination_with_mistaken_entries", refuse_determination_with_mistaken_entries)
     graph.add_node("call_search_word_forms", call_search_word_forms)
     graph.add_node("call_search_dictionaries", call_search_dictionaries)
 
@@ -216,7 +255,8 @@ def determination_agent() -> CompiledStateGraph:
     graph.add_conditional_edges("call_determination_model", should_continue_determination)
     graph.add_edge("call_search_word_forms", "call_determination_model")
     graph.add_edge("call_search_dictionaries", "call_determination_model")
-    graph.add_edge("refuse_determination",  "call_determination_model")
+    graph.add_edge("refuse_determination_with_other_calls",  "call_determination_model")
+    graph.add_edge("refuse_determination_with_mistaken_entries",  "call_determination_model")
     graph.add_edge("respond_with_determination",  END)
 
     return graph.compile()

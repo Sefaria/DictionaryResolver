@@ -1,13 +1,10 @@
 from __future__ import annotations
 from llm import model
-from models import LexRef, BoolOutput
+from models import BoolOutput
 from util import prune_lexicon_entry
 from typing import Optional
 from langsmith import traceable
-import django
-django.setup()
-from sefaria.model import LexiconEntry
-
+from tools import get_entry
 
 @traceable(
     run_type="chain",
@@ -48,11 +45,3 @@ async def is_validate_association(word: str, segment: str, entries: list[dict]) 
     result = await model.with_structured_output(BoolOutput).ainvoke(prompt)
     return result.value
 
-def get_entry(lexref: LexRef) -> Optional[LexiconEntry]:
-    """
-    This uses the Sefaria code to directly connect to the DB.
-    Ideally this would be an API, to match dependencies for the rest of this system, but no existing API fills this need.
-    :param lexref:
-    :return:
-    """
-    return LexiconEntry().load({"headword": lexref.headword, "parent_lexicon": lexref.lexicon_name})
