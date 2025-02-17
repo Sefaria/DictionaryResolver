@@ -5,6 +5,7 @@ from util import prune_lexicon_entry
 from typing import Optional
 from langsmith import traceable
 from tools import get_entry
+from log import log
 
 @traceable(
     run_type="chain",
@@ -24,6 +25,7 @@ async def vet_association_candidates(state: dict) -> dict:
     We presume that these are listed most recently matched first, and thus most likely first.
     Returns original state object, mutated. .
     """
+    log("Begin Vet Association Candidates", state)
     for association_candidate in state["cached_associations"]:
         entries = [get_entry(lexref) for lexref in association_candidate]
         if not all(entries):
@@ -32,7 +34,9 @@ async def vet_association_candidates(state: dict) -> dict:
 
         if await is_validate_association(state["word"], state["segment"], contents):
             state["selected_association"] = association_candidate
+            log("Matched Association Candidate", state)
             return state
+    log("No Association Candidates Matched", state)
     return state
 
 async def is_validate_association(word: str, segment: str, entries: list[dict]) -> bool:

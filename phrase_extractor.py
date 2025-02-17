@@ -17,7 +17,7 @@ def split_segment(input:str) -> List[str]:
     :return:
     """
     # Check for multi-word phrases that may be in the dictionary
-    prompt = f"In the segment of text below, what multi-word phrases are present that might be found in a dictionary?\n\n{input}"
+    prompt = f"In the segment of text below, what multi-word phrases or names are present that might be found in a dictionary?  Please return the phrases exactly as written, do not translate or transliterate.\n\n{input}"
     phrases = model.with_structured_output(PhrasesInSegment).invoke(prompt)
 
     words = split_hebrew_text(input)

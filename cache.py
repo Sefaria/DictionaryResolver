@@ -2,14 +2,14 @@ from sefaria.system.database import client  # a pymongo client
 from models import LexRef, WordFormAssociations, SegmentsAndLexRefs
 
 db = client["Lexicon"]
-collection = db["assocs"] # stores instances of WordFormAssociations
+cache_collection = db["assocs"] # stores instances of WordFormAssociations
 
 def clear_cache() -> None:
     """
     Clear the cache of all entries.
     :return:
     """
-    collection.drop()
+    cache_collection.drop()
 
 def get_cached_associations(wordform: str) -> list[list[LexRef]]:
     """
@@ -17,7 +17,7 @@ def get_cached_associations(wordform: str) -> list[list[LexRef]]:
     :param wordform:
     :return:
     """
-    entry = collection.find_one({"word": wordform})
+    entry = cache_collection.find_one({"word": wordform})
 
     if entry:
         wfa = WordFormAssociations(**entry)
@@ -41,7 +41,7 @@ def add_segment_to_cache(state: dict) -> None:
         # log
         return
 
-    entry = collection.find_one({"word": state["word"]})
+    entry = cache_collection.find_one({"word": state["word"]})
     if entry:
         wfa = WordFormAssociations(**entry)
 
@@ -54,12 +54,12 @@ def add_segment_to_cache(state: dict) -> None:
         else:
             wfa.associations.append(SegmentsAndLexRefs(lexrefs=state["selected_association"], refs=[state["ref"]]))
 
-        collection.update_one({"word": state["word"]}, {"$set": wfa.model_dump()})
+        cache_collection.update_one({"word": state["word"]}, {"$set": wfa.model_dump()})
 
     else:
         new_wfa = WordFormAssociations(
             word=state["word"],
             associations=[SegmentsAndLexRefs(lexrefs=state["selected_association"], refs=[state["ref"]])]
         )
-        collection.insert_one(new_wfa.model_dump())
+        cache_collection.insert_one(new_wfa.model_dump())
 

@@ -7,6 +7,10 @@ from determination_validator import vet_association_candidates
 from phrase_extractor import split_segment
 from cache import get_cached_associations, add_segment_to_cache, clear_cache
 from db import record_determination, clear_wordforms
+from log import log, clear_log
+import django
+django.setup()
+from sefaria.model import Ref, TextChunk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,6 +25,8 @@ def reset_system():
     clear_cache()
     logger.warning("Clearing Wordforms")
     clear_wordforms()
+    logger.warning("Clearing Logs")
+    clear_log()
     logger.warning("System Cleared")
 
 
@@ -31,6 +37,7 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[dict]:
     :param segment: The full text of the segment
     :return:
     """
+    logger.info(f"Splitting words for {ref}")
     words = split_segment(segment)
 
     # Create state objects
@@ -40,12 +47,17 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[dict]:
         for word in words
     ]
 
+    for state in state_objects:
+        log("Begin", state)
+
     # Vet those that have possible associations.
+    logger.info(f"Vetting Association Candidates for {ref}")
     states_with_previous_associations = [state for state in state_objects if state["cached_associations"]]
     tasks = [asyncio.create_task(vet_association_candidates(state)) for state in states_with_previous_associations]
     await asyncio.gather(*tasks)
 
     # For words that haven't yet been resolved, call the model to determine the best entries
+    logger.info(f"Getting Determinations for {ref}")
     states_without_resolution = [state for state in state_objects if not state["selected_association"]]
     tasks = [asyncio.create_task(get_determination(state)) for state in states_without_resolution]
     await asyncio.gather(*tasks)
@@ -53,7 +65,7 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[dict]:
     # Record the words and associations in the cache and in the DB.
     for state in state_objects:
         if not state["selected_association"]:
-            # log             "No associations provided for wordform"
+            log("No Association Found", state)
             continue
         # Look up entry in DB before writing to cache or DB.  The LLMs will make stuff up.
         # Make sure that we don't write empty records
@@ -80,10 +92,10 @@ if __name__ == "__main__":
     # determinations = asyncio.run(correct_words_in_segment(ref, segment))
 
     reset_system()
-
-    determinations = asyncio.run(correct_words_in_segment("Taanit 2a:4", "גְּמָ׳ תַּנָּא הֵיכָא קָאֵי דְּקָתָנֵי ״מֵאֵימָתַי״? תַּנָּא הָתָם קָאֵי —"))
-    print(determinations)
-
-    determinations = asyncio.run(correct_words_in_segment("Taanit 2a:5", "דְּקָתָנֵי: מַזְכִּירִים גְּבוּרוֹת גְּשָׁמִים בִּתְחִיַּית הַמֵּתִים, וְשׁוֹאֲלִין בְּבִרְכַּת הַשָּׁנִים, וְהַבְדָּלָה בְּחוֹנֵן הַדָּעַת. וְקָתָנֵי: מֵאֵימָתַי מַזְכִּירִים גְּבוּרוֹת גְּשָׁמִים."))
-    print(determinations)
+    page = Ref("Sanhedrin 63a")
+    segments = page.all_segment_refs()
+    for segment in segments:
+        logging.warning(f"Processing {segment.normal()}")
+        segment_text = TextChunk.remove_html_and_make_presentable(segment.text('he', vtitle="William Davidson Edition - Vocalized Aramaic").text)
+        determinations = asyncio.run(correct_words_in_segment(segment.normal(), segment_text))
 

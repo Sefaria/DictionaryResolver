@@ -12,6 +12,7 @@ from langsmith import traceable
 from llm import model
 from models import WordDetermination, LexRef
 from tools import search_word_forms, search_dictionaries, words_api, get_entry
+from log import log
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +43,7 @@ async def get_determination(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     result = await word_determination_agent.ainvoke(state, stream_mode="values")
     state.update(result)
+    log("Completed Determination", state)
     return state
 
 
@@ -53,6 +55,7 @@ async def initiate_determination(state: WordState) -> Dict[str, Any]:
     #   Make an LLM tool call with dictionary lookup to determine the best dictionary entries
     #   Return dictionary entries to add and dictionary entries to remove
     """
+    log("Begin Determination", state)
     is_phrase = re.search(r"\s", state["word"])
     system_message = SystemMessage(content=f"""You are a scholar of Jewish texts. 
     You will be given a segment of text, a {"phrase" if is_phrase else "word"} from within that segment, a list of dictionary entries currently associated with that {"phrase" if is_phrase else "word"}, and sometimes some potential entries that may or may not be correct. 
@@ -61,7 +64,6 @@ async def initiate_determination(state: WordState) -> Dict[str, Any]:
     The dictionaries at your disposal include the Jastrow Aramaic Dictionary, the Klein Dictionary of Hebrew, the BDB dictionaries of biblical Hebrew and Aramaic, and an encyclopedia of talmudic concepts and idioms called Kovetz Yesodot VaChakirot.  Each of those is preferable in its domain - Jastrow for Aramaic, Klein for Hebrew, and BDB for Biblical language. 
     When you are satisfied that you have found the best dictionary entries, return a short explanation of your work, an array of currently associated dictionary entries that should be kept, those that should be removed, and an array of dictionary entries to add. ONLY return entries that you have reviewed and are entirely sure are present in the dictionary. 
     Please return headwords exactly as you have seen them, with the same vowels and any superscript characters or numerals.  If no entries are appropriate, please respond with a determination empty of dictionary entries.""")
-
     possible_entries, associated_entries = await words_api(state["word"], state["ref"])
 
     associated_clause = "There are no entries currently associated with this word." if not associated_entries else "Associated Entries:\n" + str(associated_entries)
@@ -80,6 +82,7 @@ async def initiate_determination(state: WordState) -> Dict[str, Any]:
 
 
 async def call_determination_model(state: WordState) -> Dict[str, Any]:
+    log("Call Core Determination Model", state)
     response = await model_with_tools.ainvoke(state["messages"])
     # We return a list, because this will get added to the existing list
     return {"messages": [response]}
@@ -87,6 +90,8 @@ async def call_determination_model(state: WordState) -> Dict[str, Any]:
 
 def respond_with_determination(state: WordState) -> Dict[str, Any]:
     # Construct the final answer from the arguments of the last tool call
+    log("Respond with Determination", state)
+
     tool_calls = state["messages"][-1].tool_calls
     tool_call = next(call for call in tool_calls if call["name"] == "WordDetermination")
     determination = WordDetermination(**tool_call["args"])
@@ -112,6 +117,8 @@ def refuse_determination_with_mistaken_entries(state: WordState) -> Dict[str, An
     :param state:
     :return:
     """
+    log("Refuse Determination with Mistaken Entries", state)
+
     tool_calls = state["messages"][-1].tool_calls
     tool_call = next(call for call in tool_calls if call["name"] == "WordDetermination")
     determination = WordDetermination(**tool_call["args"])
@@ -141,6 +148,8 @@ def refuse_determination_with_other_calls(state: WordState) -> Dict[str, Any]:
     :param state:
     :return:
     """
+    log("Refuse Determination with Other Calls", state)
+
     tool_calls = state["messages"][-1].tool_calls
     calls = [c for c in tool_calls if c["name"] == "WordDetermination"]
     messages = []
@@ -180,6 +189,8 @@ def should_continue_determination(state: WordState):
 
 
 async def call_search_dictionaries(state: WordState):
+    log("Call Search Dictionaries", state)
+
     calls = [c for c in state["messages"][-1].tool_calls if c["name"] == "search_dictionaries"]
     messages = []
 
@@ -198,6 +209,8 @@ async def call_search_dictionaries(state: WordState):
 
 async def call_search_word_forms(state: WordState):
     # Gather only the calls for the "search_word_forms" tool
+    log("Call Search Word Forms", state)
+
     calls = [c for c in state["messages"][-1].tool_calls if c["name"] == "search_word_forms"]
     messages = []
 
