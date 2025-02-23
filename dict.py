@@ -5,8 +5,8 @@ from typing import List
 from determination_agent import get_determination
 from determination_validator import vet_association_candidates
 from phrase_extractor import split_segment
-from cache import get_cached_associations, add_segment_to_cache, clear_cache
-from db import record_determination, clear_wordforms
+from cache import get_cached_associations, add_segment_to_cache, add_empty_association_to_cache, clear_cache
+from db import record_determination, record_empty_determination, clear_wordforms
 from log import log, clear_log
 import django
 django.setup()
@@ -58,7 +58,7 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[dict]:
 
     # For words that haven't yet been resolved, call the model to determine the best entries
     logger.info(f"Getting Determinations for {ref}")
-    states_without_resolution = [state for state in state_objects if not state["selected_association"]]
+    states_without_resolution = [state for state in state_objects if state["selected_association"] is None]
     tasks = [asyncio.create_task(get_determination(state)) for state in states_without_resolution]
     await asyncio.gather(*tasks)
 
@@ -66,11 +66,11 @@ async def correct_words_in_segment(ref: str, segment: str) -> List[dict]:
     for state in state_objects:
         if not state["selected_association"]:
             log("No Association Found", state)
-            continue
-        # Look up entry in DB before writing to cache or DB.  The LLMs will make stuff up.
-        # Make sure that we don't write empty records
-        add_segment_to_cache(state)
-        record_determination(state)
+            record_empty_determination(state)
+            add_empty_association_to_cache(state)
+        else:
+            add_segment_to_cache(state)
+            record_determination(state)
 
     return state_objects
 
@@ -98,4 +98,3 @@ if __name__ == "__main__":
         logging.warning(f"Processing {segment.normal()}")
         segment_text = TextChunk.remove_html_and_make_presentable(segment.text('he', vtitle="William Davidson Edition - Vocalized Aramaic").text)
         determinations = asyncio.run(correct_words_in_segment(segment.normal(), segment_text))
-

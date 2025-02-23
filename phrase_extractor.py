@@ -4,6 +4,7 @@ from util import split_hebrew_text
 from llm import model
 from models import PhrasesInSegment
 from langsmith import traceable
+import unicodedata
 
 @traceable(
     run_type="chain",
@@ -22,4 +23,5 @@ def split_segment(input:str) -> List[str]:
 
     words = split_hebrew_text(input)
     words += phrases.phrases
+    words = [ unicodedata.normalize("NFC", w) for w in words ]
     return words

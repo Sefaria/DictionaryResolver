@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 
 class LexRef(BaseModel):
@@ -16,13 +16,14 @@ class LexRef(BaseModel):
         # Return a hash based on the same fields used in __eq__
         return hash((self.headword, self.lexicon_name))
 
-class SegmentsAndLexRefs(BaseModel):
+class LexiconAssociations(BaseModel):
     lexrefs: List[LexRef] = Field(description="The dictionary entries associated with the word form")
     refs: List[str] = Field(description="The refs of the segments of text in which the word form appears")
+    reasoning: Optional[str] = Field(default=None, description="The reasoning behind the association of these entries")
 
 class WordFormAssociations(BaseModel):
     word: str = Field(description="The word form being associated with the dictionary entries")
-    associations: List[SegmentsAndLexRefs] = Field(description="The associations of the word form with dictionary entries")
+    associations: List[LexiconAssociations] = Field(description="The associations of the word form with dictionary entries")
 
 class WordDetermination(BaseModel):
     """Record a determination of dictionary entries to keep, add and remove.  This can only be used after all lookups have completed and determinations have been made. It can not be called with other tools. It is a terminal tool."""

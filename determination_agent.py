@@ -10,7 +10,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langsmith import traceable
 
 from llm import model
-from models import WordDetermination, LexRef
+from models import WordDetermination, LexRef, LexiconAssociations
 from tools import search_word_forms, search_dictionaries, words_api, get_entry
 from log import log
 
@@ -33,7 +33,7 @@ async def get_determination(state: Dict[str, Any]) -> Dict[str, Any]:
     initial state includes:
         - word: str
         - segment: str
-        - cached_associations: list[list[LexRef]]
+        - cached_associations: list[LexiconAssociations]
     we add:
         - selected_association: list[LexRef]
         - determination: WordDetermination
@@ -235,7 +235,7 @@ class WordState(MessagesState):
     word: str
     segment: str
     ref: str
-    cached_associations: list[list[LexRef]]
+    cached_associations: list[LexiconAssociations]
     selected_association: list[LexRef]
     determination: WordDetermination
 

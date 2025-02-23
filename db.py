@@ -90,3 +90,12 @@ def create_wordform(word: str, associations: list[LexRef], ref: str):
 
 def clear_wordforms():
     WordFormSet({"generated_by": "LLM Dictionary Resolver"}).delete()
+
+def record_empty_determination(state: dict) -> None:
+    """
+    Remove any existing associations of the given word and ref from the DB,
+    since no association was determined.
+    """
+    all_wordforms = WordFormSet({"form": state["word"], "refs": state["ref"]})
+    for wordform in all_wordforms:
+        remove_ref_from_wordform(wordform, state["ref"])
