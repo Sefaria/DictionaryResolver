@@ -39,10 +39,10 @@ async def vet_association_candidates(state: dict) -> dict:
                 return state
         else:
             # Handle empty determination candidate by propagating cached reasoning
-            if await is_valid_empty_association(state["word"], state["segment"], candidate["reasoning"]):
+            if await is_valid_empty_association(state["word"], state["segment"], candidate.reasoning):
                 state["selected_association"] = []  # empty list
                 # Need to pass along the reasoning
-                state["determination"] = WordDetermination(word=state["word"], entries_to_keep=[], entries_to_remove=[], entries_to_add=[], reasoning=candidate["reasoning"])
+                state["determination"] = WordDetermination(word=state["word"], entries_to_keep=[], entries_to_remove=[], entries_to_add=[], reasoning=candidate.reasoning)
                 log("Matched Empty Association Candidate", state)
                 return state
     log("No Association Candidates Matched", state)
