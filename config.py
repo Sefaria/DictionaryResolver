@@ -23,7 +23,11 @@ SEFARIA_API_BASE = os.environ.get("DICTRES_SEFARIA_API_BASE", "https://www.sefar
 CACHE_TTL = os.environ.get("DICTRES_CACHE_TTL", "5m")
 
 # Batch driver tuning
-POLL_INTERVAL_SECONDS = int(os.environ.get("DICTRES_POLL_INTERVAL", "20"))
+POLL_INTERVAL_SECONDS = int(os.environ.get("DICTRES_POLL_INTERVAL", "10"))
+# How many results to apply concurrently. The work is dominated by dictionary lookups
+# over HTTP, so concurrency collapses the dead time between rounds; keep it modest so
+# we don't hammer the Sefaria API.
+APPLY_CONCURRENCY = int(os.environ.get("DICTRES_APPLY_CONCURRENCY", "16"))
 MAX_REQUESTS_PER_BATCH = 10_000
 MAX_AGENT_TURNS = 10         # LLM turns per word before giving up
 MAX_TASK_ATTEMPTS = 3        # resubmissions after batch-level errors
