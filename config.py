@@ -1,0 +1,22 @@
+import os
+
+# Models. Determinations need scholarly judgment across Hebrew/Aramaic; Sonnet 5
+# is near-Opus on this class of task at 1/3 the price. Vetting and phrase
+# extraction are narrow classification tasks; Haiku 4.5 suffices.
+DETERMINATION_MODEL = os.environ.get("DICTRES_DETERMINATION_MODEL", "claude-sonnet-5")
+VETTING_MODEL = os.environ.get("DICTRES_VETTING_MODEL", "claude-haiku-4-5")
+PHRASE_MODEL = os.environ.get("DICTRES_PHRASE_MODEL", "claude-haiku-4-5")
+
+DETERMINATION_MAX_TOKENS = 4096
+VETTING_MAX_TOKENS = 1024
+PHRASE_MAX_TOKENS = 1024
+
+# Sefaria API host for dictionary lookups (words API + search).
+# The DB writes always go to the local Mongo that sefaria.model is configured for.
+SEFARIA_API_BASE = os.environ.get("DICTRES_SEFARIA_API_BASE", "https://www.sefaria.org")
+
+# Batch driver tuning
+POLL_INTERVAL_SECONDS = int(os.environ.get("DICTRES_POLL_INTERVAL", "20"))
+MAX_REQUESTS_PER_BATCH = 10_000
+MAX_AGENT_TURNS = 10         # LLM turns per word before giving up
+MAX_TASK_ATTEMPTS = 3        # resubmissions after batch-level errors
