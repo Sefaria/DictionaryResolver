@@ -297,15 +297,24 @@ async def poll_and_apply_round(run_id: str, round_doc: dict) -> None:
     # Materialize inside the retry so a mid-stream drop refetches the whole set.
     results = await resilient(lambda: list(client().messages.batches.results(batch_id)),
                               f"fetch results {batch_id}")
-    for result in results:
+    # Apply concurrently: the slow part is each determination's dictionary lookups
+    # (HTTP to Sefaria), and applying hundreds of them serially added ~2 minutes between
+    # rounds - dead time that ages out prompt-cache entries and stretches wall clock.
+    # This is safe as written: every DB-mutating helper (cache, WordForm, task-state
+    # writes) is synchronous, so it runs to completion without yielding the event loop
+    # and cannot interleave with another task's read-modify-write.
+    sem = asyncio.Semaphore(config.APPLY_CONCURRENCY)
+
+    async def apply_one(result) -> None:
         task_id_str, turn_str = result.custom_id.rsplit("_", 1)
         task = store.tasks.find_one({"_id": store.ObjectId(task_id_str)})
         if task is None or task["status"] != "in_batch" or task["turn"] != int(turn_str):
-            continue  # already applied (restart replay) or stale
+            return  # already applied (restart replay) or stale
         if result.result.type == "succeeded":
             blocks = sanitize_content(result.result.message.content)
             try:
-                await apply_result(run_id, task, blocks)
+                async with sem:
+                    await apply_result(run_id, task, blocks)
             except Exception:
                 logger.exception("Failed applying result for %s / %s", task["ref"], task.get("word"))
                 store.fail_task(task["_id"], "exception while applying result")
@@ -318,6 +327,10 @@ async def poll_and_apply_round(run_id: str, round_doc: dict) -> None:
                 store.requeue_task(task["_id"], config.MAX_TASK_ATTEMPTS)
         else:  # canceled / expired -> retryable
             store.requeue_task(task["_id"], config.MAX_TASK_ATTEMPTS)
+
+    started = time.time()
+    await asyncio.gather(*[apply_one(r) for r in results])
+    logger.info("Applied %d results in %.0fs", len(results), time.time() - started)
 
     store.close_round(round_doc["_id"])
 
