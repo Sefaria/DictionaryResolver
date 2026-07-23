@@ -306,6 +306,33 @@ def tool_result_block(tool_use_id: str, result, is_error: bool = False) -> dict:
     }
 
 
+# --- Payload instrumentation --------------------------------------------------
+
+def measure_payload(params: dict) -> dict:
+    """
+    Character-level breakdown of a request, for cost attribution: how much of what we
+    send is dictionary content (tool_result) versus prompt scaffolding (system, tools)
+    versus the model's own output being replayed (tool_use, text).
+
+    Characters rather than tokens so this is free - no API calls in the hot path.
+    Measured ratio for this content is ~2.6 chars/token.
+    """
+    out = {"system": 0, "tools": 0, "text": 0, "tool_use": 0, "tool_result": 0}
+    out["system"] = len(params.get("system") or "")
+    out["tools"] = len(json.dumps(params.get("tools") or [], ensure_ascii=False))
+    for message in params.get("messages", []):
+        content = message.get("content")
+        if isinstance(content, str):
+            out["text"] += len(content)
+            continue
+        for block in content or []:
+            if not isinstance(block, dict):
+                continue
+            size = len(json.dumps(block, ensure_ascii=False))
+            out[block.get("type") if block.get("type") in out else "text"] += size
+    return out
+
+
 # --- Prompt caching for the multi-turn determination agent -------------------
 
 # "5m" is the API default and is expressed by omitting ttl entirely.

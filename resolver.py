@@ -350,16 +350,24 @@ async def submit_round(run_id: str) -> bool:
         return False
 
     requests = []
+    payload = {"system": 0, "tools": 0, "text": 0, "tool_use": 0, "tool_result": 0}
     for t in pending:
         params = t["params"]
         if t["kind"] == "resolve":  # cache the replayed agent prefix; single-shot tasks gain nothing
             params = agent_core.add_prompt_caching(params)
+            for k, v in agent_core.measure_payload(params).items():
+                payload[k] += v
         requests.append({"custom_id": f"{t['_id']}_{t['turn']}", "params": params})
+
+    total = sum(payload.values())
+    if total:
+        logger.info("determination payload: %s",
+                    " ".join(f"{k}={100*v//total}%" for k, v in payload.items()))
     batch = await resilient(lambda: client().messages.batches.create(requests=requests),
                             "submit batch", attempts=6)
     task_ids = [t["_id"] for t in pending]
     store.mark_in_batch(task_ids, batch.id)
-    store.create_round(run_id, batch.id, task_ids)
+    store.create_round(run_id, batch.id, task_ids, payload=payload)
     logger.info("Submitted batch %s with %d requests", batch.id, len(requests))
     return True
 
