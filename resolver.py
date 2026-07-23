@@ -51,8 +51,41 @@ _client = None
 def client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic()
+        # Long-running offline job: a laptop sleeping or changing networks kills
+        # in-flight connections, so be generous with retries and timeouts.
+        _client = anthropic.Anthropic(max_retries=8, timeout=120.0)
     return _client
+
+
+# Errors that mean "try again later", not "this request is wrong".
+TRANSIENT_ERRORS = (
+    anthropic.APITimeoutError,
+    anthropic.APIConnectionError,
+    anthropic.InternalServerError,
+    anthropic.RateLimitError,
+)
+
+
+async def resilient(fn, what: str, attempts: int = 20):
+    """
+    Run a blocking Anthropic call, riding out network drops (laptop sleep, relocation,
+    transient API errors) instead of killing the run.
+
+    Batch state lives server-side and in Mongo, and result application is guarded by a
+    per-task turn check, so retrying a poll or a results fetch is always safe. A repeated
+    batch submission is also safe (the duplicate's results are discarded by the turn
+    guard); it would only waste one round's tokens, which beats dying unattended.
+    """
+    delay = 5
+    for i in range(attempts):
+        try:
+            return fn()
+        except TRANSIENT_ERRORS as e:
+            logger.warning("%s failed (%s); retry %d/%d in %ds",
+                           what, type(e).__name__, i + 1, attempts, delay)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 300)
+    raise RuntimeError(f"{what}: exhausted {attempts} retries")
 
 VTITLE = "William Davidson Edition - Vocalized Aramaic"
 
@@ -252,7 +285,8 @@ async def apply_result(run_id: str, task: dict, blocks: list[dict]) -> None:
 async def poll_and_apply_round(run_id: str, round_doc: dict) -> None:
     batch_id = round_doc["batch_id"]
     while True:
-        batch = client().messages.batches.retrieve(batch_id)
+        batch = await resilient(lambda: client().messages.batches.retrieve(batch_id),
+                                f"poll {batch_id}")
         if batch.processing_status == "ended":
             break
         counts = batch.request_counts
@@ -260,7 +294,10 @@ async def poll_and_apply_round(run_id: str, round_doc: dict) -> None:
                     batch_id, counts.processing, counts.succeeded, counts.errored)
         await asyncio.sleep(config.POLL_INTERVAL_SECONDS)
 
-    for result in client().messages.batches.results(batch_id):
+    # Materialize inside the retry so a mid-stream drop refetches the whole set.
+    results = await resilient(lambda: list(client().messages.batches.results(batch_id)),
+                              f"fetch results {batch_id}")
+    for result in results:
         task_id_str, turn_str = result.custom_id.rsplit("_", 1)
         task = store.tasks.find_one({"_id": store.ObjectId(task_id_str)})
         if task is None or task["status"] != "in_batch" or task["turn"] != int(turn_str):
@@ -305,7 +342,8 @@ async def submit_round(run_id: str) -> bool:
         if t["kind"] == "resolve":  # cache the replayed agent prefix; single-shot tasks gain nothing
             params = agent_core.add_prompt_caching(params)
         requests.append({"custom_id": f"{t['_id']}_{t['turn']}", "params": params})
-    batch = client().messages.batches.create(requests=requests)
+    batch = await resilient(lambda: client().messages.batches.create(requests=requests),
+                            "submit batch", attempts=6)
     task_ids = [t["_id"] for t in pending]
     store.mark_in_batch(task_ids, batch.id)
     store.create_round(run_id, batch.id, task_ids)
