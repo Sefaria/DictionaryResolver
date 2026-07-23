@@ -308,7 +308,9 @@ def tool_result_block(tool_use_id: str, result, is_error: bool = False) -> dict:
 
 # --- Prompt caching for the multi-turn determination agent -------------------
 
-CACHE_CONTROL = {"type": "ephemeral", "ttl": "1h"}
+# "5m" is the API default and is expressed by omitting ttl entirely.
+CACHE_CONTROL = ({"type": "ephemeral"} if config.CACHE_TTL == "5m"
+                 else {"type": "ephemeral", "ttl": config.CACHE_TTL})
 
 
 def add_prompt_caching(params: dict) -> dict:
@@ -322,8 +324,7 @@ def add_prompt_caching(params: dict) -> dict:
     round's write). A messages breakpoint caches everything rendered before it, so the
     shared system prompt and tool definitions are covered without separate breakpoints.
 
-    1h TTL (not the 5-minute default) is required because successive batch rounds are
-    several minutes apart. Only the determination agent replays a growing prefix; the
+    TTL is config.CACHE_TTL. Only the determination agent replays a growing prefix; the
     single-shot vet and phrase requests gain nothing, so this is not applied to them.
 
     The transform is applied at submission time and not persisted, so stored params

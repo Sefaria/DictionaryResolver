@@ -15,6 +15,13 @@ PHRASE_MAX_TOKENS = 1024
 # The DB writes always go to the local Mongo that sefaria.model is configured for.
 SEFARIA_API_BASE = os.environ.get("DICTRES_SEFARIA_API_BASE", "https://www.sefaria.org")
 
+# Prompt-cache TTL for the determination agent's replayed prefix: "5m" or "1h".
+# Tradeoff measured on Sanhedrin 63b: 1h costs a 2x write premium, 5m only 1.25x.
+# Because each turn appends full dictionary entries, the per-turn delta (and so the
+# write) is large, and the 1h premium ate most of the read saving (10% net). 5m should
+# do much better provided rounds stay inside the window; a miss just costs full price.
+CACHE_TTL = os.environ.get("DICTRES_CACHE_TTL", "5m")
+
 # Batch driver tuning
 POLL_INTERVAL_SECONDS = int(os.environ.get("DICTRES_POLL_INTERVAL", "20"))
 MAX_REQUESTS_PER_BATCH = 10_000
