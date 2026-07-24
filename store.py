@@ -89,12 +89,14 @@ def requeue_task(task_id: ObjectId, max_attempts: int) -> None:
                          {"$set": {"status": "pending", "updated_at": now()}, "$inc": {"attempts": 1}})
 
 
-def create_round(run_id: str, batch_id: str, task_ids: List[ObjectId]) -> ObjectId:
+def create_round(run_id: str, batch_id: str, task_ids: List[ObjectId],
+                 payload: Optional[dict] = None) -> ObjectId:
     return rounds.insert_one({
         "run_id": run_id,
         "batch_id": batch_id,
         "task_ids": task_ids,
         "status": "submitted",
+        "payload": payload,   # char-level attribution of the determination requests
         "created_at": now(),
         "updated_at": now(),
     }).inserted_id
@@ -105,7 +107,16 @@ def open_rounds(run_id: str) -> List[dict]:
 
 
 def close_round(round_id: ObjectId) -> None:
-    rounds.update_one({"_id": round_id}, {"$set": {"status": "ended", "updated_at": now()}})
+    rounds.update_one({"_id": round_id}, {"$set": {"status": "ended", "ended_at": now()}})
+
+
+def last_round_turnaround(run_id: str) -> Optional[float]:
+    """Submit->end wall-clock of the most recently ended round, in seconds, or None."""
+    doc = rounds.find_one({"run_id": run_id, "status": "ended", "ended_at": {"$exists": True}},
+                          sort=[("ended_at", -1)])
+    if not doc or "created_at" not in doc:
+        return None
+    return (doc["ended_at"] - doc["created_at"]).total_seconds()
 
 
 def run_status(run_id: str) -> dict:
