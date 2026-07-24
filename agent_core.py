@@ -335,28 +335,32 @@ def measure_payload(params: dict) -> dict:
 
 # --- Prompt caching for the multi-turn determination agent -------------------
 
-# "5m" is the API default and is expressed by omitting ttl entirely.
-CACHE_CONTROL = ({"type": "ephemeral"} if config.CACHE_TTL == "5m"
-                 else {"type": "ephemeral", "ttl": config.CACHE_TTL})
+def cache_control(ttl: str) -> dict:
+    # "5m" is the API default and is expressed by omitting ttl entirely.
+    return {"type": "ephemeral"} if ttl == "5m" else {"type": "ephemeral", "ttl": ttl}
 
 
-def add_prompt_caching(params: dict) -> dict:
+def add_prompt_caching(params: dict, ttl: str | None = None) -> dict:
     """
-    Return a copy of a determination request with 1h-TTL cache breakpoints so each
-    agent turn reads the replayed conversation prefix (system + tools + earlier turns)
-    from cache at ~0.1x instead of reprocessing it at full price.
+    Return a copy of a determination request with cache breakpoints so each agent turn
+    reads the replayed conversation prefix (system + tools + earlier turns) from cache at
+    ~0.1x instead of reprocessing it at full price.
 
     Breakpoints go on the last content block of the final message (writes the current
     prefix) and of the message two turns back (the read point matching the previous
     round's write). A messages breakpoint caches everything rendered before it, so the
     shared system prompt and tool definitions are covered without separate breakpoints.
 
-    TTL is config.CACHE_TTL. Only the determination agent replays a growing prefix; the
-    single-shot vet and phrase requests gain nothing, so this is not applied to them.
+    ``ttl`` selects the write TTL ("5m" or "1h"); defaults to config.CACHE_TTL. The driver
+    passes "1h" when the previous round ran long, so a slow batch turnaround doesn't age
+    the entry out before the next round reads it (a miss otherwise pays the write premium
+    for nothing). Only the determination agent replays a growing prefix; the single-shot
+    vet and phrase requests gain nothing, so this is not applied to them.
 
     The transform is applied at submission time and not persisted, so stored params
     stay clean and breakpoints are recomputed fresh each round.
     """
+    cc = cache_control(ttl or config.CACHE_TTL)
     msgs = params.get("messages")
     if not msgs:
         return params
@@ -375,6 +379,6 @@ def add_prompt_caching(params: dict) -> dict:
         else:
             content = [dict(b) if isinstance(b, dict) else b for b in content]
         if content and isinstance(content[-1], dict):
-            content[-1] = {**content[-1], "cache_control": CACHE_CONTROL}
+            content[-1] = {**content[-1], "cache_control": cc}
         m["content"] = content
     return out

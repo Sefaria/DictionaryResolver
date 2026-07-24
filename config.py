@@ -16,11 +16,16 @@ PHRASE_MAX_TOKENS = 1024
 SEFARIA_API_BASE = os.environ.get("DICTRES_SEFARIA_API_BASE", "https://www.sefaria.org")
 
 # Prompt-cache TTL for the determination agent's replayed prefix: "5m" or "1h".
-# Tradeoff measured on Sanhedrin 63b: 1h costs a 2x write premium, 5m only 1.25x.
-# Because each turn appends full dictionary entries, the per-turn delta (and so the
-# write) is large, and the 1h premium ate most of the read saving (10% net). 5m should
-# do much better provided rounds stay inside the window; a miss just costs full price.
-CACHE_TTL = os.environ.get("DICTRES_CACHE_TTL", "5m")
+# Tradeoff measured on Sanhedrin 63b/64a: 1h costs a 2x write premium, 5m only 1.25x, and
+# the read hit-rate is the same when a round lands inside the window - so 5m is the better
+# default. But batch turnaround is not controllable (observed 3-29 min on one run), and a
+# round that overruns the 5m window takes 0% read while still paying the write: worse than
+# no caching. Adaptive mode writes 1h only for the round following a slow one.
+CACHE_TTL = os.environ.get("DICTRES_CACHE_TTL", "5m")           # base TTL when rounds are fast
+ADAPTIVE_CACHE_TTL = os.environ.get("DICTRES_ADAPTIVE_CACHE_TTL", "1") == "1"
+# If the previous round's submit->end turnaround exceeded this, write the next round at 1h.
+# Threshold sits below the 5-minute (300s) window with margin for our own poll/apply.
+CACHE_SLOW_ROUND_SECONDS = int(os.environ.get("DICTRES_CACHE_SLOW_ROUND_SECONDS", "240"))
 
 # Batch driver tuning
 POLL_INTERVAL_SECONDS = int(os.environ.get("DICTRES_POLL_INTERVAL", "10"))

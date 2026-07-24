@@ -349,12 +349,22 @@ async def submit_round(run_id: str) -> bool:
     if not pending:
         return False
 
+    # Adaptive cache TTL: if the previous round overran the 5-minute window, write this
+    # round at 1h so the entry survives to be read; otherwise 5m (cheaper write premium).
+    ttl = config.CACHE_TTL
+    if config.ADAPTIVE_CACHE_TTL:
+        prev = store.last_round_turnaround(run_id)
+        if prev is not None and prev > config.CACHE_SLOW_ROUND_SECONDS:
+            ttl = "1h"
+        logger.info("cache ttl for this round: %s (prev round turnaround %s)",
+                    ttl, f"{prev:.0f}s" if prev is not None else "n/a")
+
     requests = []
     payload = {"system": 0, "tools": 0, "text": 0, "tool_use": 0, "tool_result": 0}
     for t in pending:
         params = t["params"]
         if t["kind"] == "resolve":  # cache the replayed agent prefix; single-shot tasks gain nothing
-            params = agent_core.add_prompt_caching(params)
+            params = agent_core.add_prompt_caching(params, ttl=ttl)
             for k, v in agent_core.measure_payload(params).items():
                 payload[k] += v
         requests.append({"custom_id": f"{t['_id']}_{t['turn']}", "params": params})
