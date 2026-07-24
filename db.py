@@ -6,22 +6,39 @@ from typing import Optional
 from sefaria.utils.hebrew import strip_nikkud
 from log import log
 
+LLM = "LLM Dictionary Resolver"
+
+
+def superseded_wordforms(word: str, ref: str, keep: Optional[WordForm] = None):
+    """
+    Every wordform (any source) that claims this word at this ref, matched by
+    CONSONANTAL form rather than exact vocalization. The LLM determination is
+    authoritative for the segment, so pre-existing associations under a different
+    vowel-pattern or prefix-split (e.g. prefix_adder_1's כריסו) - which an exact
+    form match would miss - are superseded here. `keep` is the wordform carrying
+    our own determination, which is not scrubbed.
+    """
+    cf = strip_nikkud(word)
+    return [wf for wf in WordFormSet({"c_form": cf, "refs": ref})
+            if keep is None or wf != keep]
+
+
 def record_determination(state: dict) -> None:
     # As currently used, we shouldn't trip this, but defensive programming
     if not state["selected_association"]:
         return
 
-    all_wordforms = WordFormSet({"form": state["word"], "refs": state["ref"]})
+    # Our determination lives in the LLM layer; find or create its wordform there.
     matching_wordform = get_matching_wordform(state["word"], state["selected_association"])
-    mistaken_wordforms = [wf for wf in all_wordforms if wf != matching_wordform]
+    superseded = superseded_wordforms(state["word"], state["ref"], keep=matching_wordform)
 
     if matching_wordform:
         add_ref_to_wordform(matching_wordform, state["ref"])
     else:
         create_wordform(state["word"], state["selected_association"], state["ref"])
 
-    for mistaken_wordform in mistaken_wordforms:
-        remove_ref_from_wordform(mistaken_wordform, state["ref"])
+    for wordform in superseded:
+        remove_ref_from_wordform(wordform, state["ref"])
 
 def remove_ref_from_wordform(wordform: WordForm, ref: str):
     """
@@ -47,6 +64,7 @@ def get_matching_wordform(word: str, associations: list[LexRef]) -> Optional[Wor
     """
     query = {
         "form": word,
+        "generated_by": LLM,   # our determinations live in the LLM layer; never attach to a legacy wordform
         "lookups": {
             "$all": [ { "headword": x.headword, "parent_lexicon": x.lexicon_name } for x in associations]
         },
@@ -93,9 +111,9 @@ def clear_wordforms():
 
 def record_empty_determination(state: dict) -> None:
     """
-    Remove any existing associations of the given word and ref from the DB,
-    since no association was determined.
+    We determined this word has no valid dictionary entry here, so no wordform should
+    claim it at this ref - scrub every existing association (any source, matched by
+    consonantal form) for this word at this ref.
     """
-    all_wordforms = WordFormSet({"form": state["word"], "refs": state["ref"]})
-    for wordform in all_wordforms:
+    for wordform in superseded_wordforms(state["word"], state["ref"]):
         remove_ref_from_wordform(wordform, state["ref"])
