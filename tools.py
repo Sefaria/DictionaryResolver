@@ -22,13 +22,14 @@ lexicon_names = list(lexicon_map.values())
 lexicon_search_filters = list(lexicon_map.keys())
 
 RETRIES = 3
+SEFARIA_API_HEADERS = {"User-Agent": "Sefaria/dictionary-resolver"}
 
 
 async def _get_json(url: str) -> dict | list:
     last_exc = None
     for attempt in range(RETRIES):
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(headers=SEFARIA_API_HEADERS) as session:
                 async with session.get(url) as response:
                     response.raise_for_status()
                     return await response.json()
@@ -101,7 +102,7 @@ async def _search(query, filters=None):
     last_exc = None
     for attempt in range(RETRIES):
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(headers=SEFARIA_API_HEADERS) as session:
                 async with session.post(url, json=payload, headers=headers) as response:
                     response.raise_for_status()
                     return await response.json()
